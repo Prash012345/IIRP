@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Server, ArrowDownRight, AlertCircle, CheckCircle } from 'lucide-react';
+import ServiceGraph from '../components/ServiceGraph';
 
 export default function Services() {
   const [data, setData] = useState({ services: [], impactByService: {} });
@@ -22,7 +23,7 @@ export default function Services() {
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading services...</div>;
 
-  const { services, impactByService } = data;
+  const { services, dependencies, impactByService } = data;
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -56,6 +57,12 @@ export default function Services() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Dependancy Graph */}
+      <div className="mt-8">
+        <h2 className="text-xl font-bold text-slate-800 mb-4">Architecture Map</h2>
+        <ServiceGraph services={services} dependencies={dependencies} />
       </div>
 
       {/* Dependency Impact Analysis */}
