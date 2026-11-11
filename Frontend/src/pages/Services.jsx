@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import api from '../services/api';
 import { Server, ArrowDownRight, AlertCircle, CheckCircle } from 'lucide-react';
 import ServiceGraph from '../components/ServiceGraph';
+import { AuthContext } from '../contexts/AuthContext'
+
 
 export default function Services() {
   const [data, setData] = useState({ services: [], impactByService: {} });
   const [loading, setLoading] = useState(true);
+  const { user } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchGraph = async () => {
@@ -64,6 +67,38 @@ export default function Services() {
         <h2 className="text-xl font-bold text-slate-800 mb-4">Architecture Map</h2>
         <ServiceGraph services={services} dependencies={dependencies} />
       </div>
+
+      {user?.role === 'ADMIN' && (
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+          <div className="bg-surface p-6 rounded-lg border">
+            <h3 className="font-bold mb-3 text-slate-800">Add New Service (Admin)</h3>
+            <form onSubmit={async (e) => { e.preventDefault(); await api.post('/services', { name: e.target.name.value, status: 'HEALTHY' }); window.location.reload(); }} className="flex gap-2">
+              <input name="name" required placeholder="Service Name" className="flex-1 px-3 py-2 border rounded text-sm" />
+              <button type="submit" className="bg-slate-800 text-white px-4 py-2 rounded text-sm">Add</button>
+            </form>
+          </div>
+          <div className="bg-surface p-6 rounded-lg border">
+            <h3 className="font-bold mb-3 text-slate-800">Map Dependency (Admin)</h3>
+            <form onSubmit={async (e) => { 
+                e.preventDefault(); 
+                try {
+                  await api.post('/services/dependencies', { serviceId: e.target.srv.value, dependsOnId: e.target.dep.value }); 
+                  window.location.reload(); 
+                } catch(err) { alert(err.response?.data?.error || 'Error adding dependency'); }
+              }} className="flex gap-2">
+              <select name="srv" required className="flex-1 px-3 py-2 border rounded text-sm">
+                <option value="">Downstream Service...</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <select name="dep" required className="flex-1 px-3 py-2 border rounded text-sm">
+                <option value="">Depends on Upstream...</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button type="submit" className="bg-slate-800 text-white px-4 py-2 rounded text-sm">Map</button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Dependency Impact Analysis */}
       {Object.keys(impactByService).length > 0 && (

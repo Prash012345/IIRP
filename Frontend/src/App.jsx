@@ -6,7 +6,9 @@ import Layout from './components/Layout';
 // Import actual pages
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import NewIncident from './pages/NewIncident';
 import IncidentDetail from './pages/IncidentDetail';
+import Deployments from './pages/Deployments';
 import Services from './pages/Services';
 import Report from './pages/Report';
 
@@ -29,8 +31,10 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="incidents" element={<IncidentsList />} />
+            <Route path="incidents/new" element={<NewIncident />} />
             <Route path="incidents/:id" element={<IncidentDetail />} />
             <Route path="incidents/:id/report" element={<Report />} />
+            <Route path="deployments" element={<Deployments />} />
             <Route path="services" element={<Services />} />
           </Route>
         </Routes>

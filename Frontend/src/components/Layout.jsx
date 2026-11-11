@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { ShieldAlert, LogOut, LayoutDashboard, Server, Activity } from 'lucide-react';
+import { ShieldAlert, LogOut, LayoutDashboard, Server, Activity, Rocket } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useContext(AuthContext);
@@ -16,6 +16,7 @@ export default function Layout() {
   const navLinks = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Incidents', path: '/incidents', icon: Activity },
+    { name: 'Deployments', path: '/deployments', icon: Rocket },
     { name: 'Services', path: '/services', icon: Server },
   ];
 

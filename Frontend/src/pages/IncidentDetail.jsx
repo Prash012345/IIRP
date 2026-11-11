@@ -113,9 +113,27 @@ export default function IncidentDetail() {
               </h1>
               <p className="text-slate-500 mt-1">Reported {new Date(incident.created_at).toLocaleString()}</p>
             </div>
-            <div className="flex gap-2">
-              <Badge type="{incident.severity}">{incident.severity}</Badge>
-              <Badge type="{incident.status}">{incident.status}</Badge>
+            <div className="flex gap-2 items-center">
+              <select 
+                className="text-xs border rounded p-1 bg-slate-50"
+                value={incident.severity}
+                onChange={(e) => api.patch(`/incidents/${id}`, { severity: e.target.value })}
+              >
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LOW">LOW</option>
+              </select>
+              <select 
+                className="text-xs border rounded p-1 bg-slate-50"
+                value={incident.status}
+                onChange={(e) => api.patch(`/incidents/${id}`, { status: e.target.value })}
+              >
+                <option value="OPEN">OPEN</option>
+                <option value="INVESTIGATING">INVESTIGATING</option>
+                <option value="MONITORING">MONITORING</option>
+                <option value="RESOLVED">RESOLVED</option>
+              </select>
             </div>
           </div>
           <p className="text-slate-700 whitespace-pre-wrap">{incident.description}</p>
