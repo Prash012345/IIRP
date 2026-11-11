@@ -31,7 +31,7 @@ async function seed() {
       [passwordHash, passwordHash, passwordHash]
     );
 
-    // 2. Services (matching UI Reference)
+    // 2. Services
     await connection.execute(
       `INSERT INTO services (id, name, slug, status, description) VALUES
        (1, 'API Gateway', 'api-gateway', 'DEGRADED', 'Core edge routing gateway'),
@@ -41,9 +41,7 @@ async function seed() {
        (5, 'Mobile App', 'mobile-app', 'DEGRADED', 'iOS and Android client API consumer')`
     );
 
-    // 3. Service Dependencies (matching UI Diagram #3)
-    // Storefront(2), Database(3), Payments(4) depend on API Gateway(1)
-    // Mobile App(5) depends on Storefront(2)
+    // 3. Service Dependencies
     await connection.execute(
       `INSERT INTO service_dependencies (service_id, depends_on_id) VALUES
        (2, 1),
@@ -64,7 +62,7 @@ async function seed() {
       [minAgo(145), hoursAgo(6)]
     );
 
-    // 5. Incidents (INC-1001 to INC-1005 + INC-1000 for recurrence check)
+    // 5. Incidents
     await connection.execute(
       `INSERT INTO incidents (id, code, title, description, category, severity, status, service_id, created_by_id, assigned_to_id, created_at, resolved_at) VALUES
        (1, 'INC-1001', 'API returning 500 errors', 'High rate of HTTP 500 responses observed on /v1/checkout routes through API Gateway.', 'Backend', 'CRITICAL', 'INVESTIGATING', 1, 2, 3, ?, NULL),

@@ -23,33 +23,34 @@ services:
     ports:
       - "6379:6379"
 
-  # backend:
-  #   build: ./Backend
-  #   container_name: incident_backend
-  #   restart: unless-stopped
-  #   ports:
-  #     - "4000:4000"
-  #   environment:
-  #     - NODE_ENV=production
-  #     - PORT=4000
-  #     - DATABASE_URL=mysql://root:rootpassword@mysql:3306/incident_db
-  #     - REDIS_URL=redis://redis:6379
-  #     - JWT_SECRET=Ils6ZsfsoM7eWs3lP99S7Ft4BwRUCDPva1M70yW4w7X
-  #     - FRONTEND_URL=http://localhost:8080
-  #   depends_on:
-  #     mysql:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
+  backend:
+    build: ./Backend
+    container_name: incident_backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATABASE_URL=mysql://root:rootpassword@mysql:3306/incident_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=Ils6ZsfsoM7eWs3lP99S7Ft4BwRUCDPva1M70yW4w7X
+      - FRONTEND_URL=http://localhost:8080
+      - CORRELATION_WINDOW_MINUTES=60
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
-  # frontend:
-  #   build: ./Frontend
-  #   container_name: incident_frontend
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8080:80"
-  #   depends_on:
-  #     - backend
+  frontend:
+    build: ./Frontend
+    container_name: incident_frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
   mysqldata:

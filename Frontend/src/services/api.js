@@ -4,7 +4,6 @@ const api = axios.create({
   baseURL: 'http://localhost:4000/api',
 });
 
-// Automatically attach token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -13,7 +12,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle global 401 Unauthorized (e.g., token expiration)
 api.interceptors.response.use(
   (response) => response,
   (error) => {

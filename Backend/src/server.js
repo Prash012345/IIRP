@@ -46,7 +46,7 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-// Mount API Routes
+// API Routes
 app.use("/api", apiRouter);
 
 // Global Error Handler (Requirement 6)
@@ -70,7 +70,7 @@ if (env.NODE_ENV !== "test") {
     console.log(
       JSON.stringify({
         level: "info",
-        message: `🚀 Backend server running on http://localhost:${env.PORT}`,
+        message: `Backend server running on http://localhost:${env.PORT}`,
         timestamp: new Date().toISOString(),
       }),
     );

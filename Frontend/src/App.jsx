@@ -3,18 +3,16 @@ import { AuthProvider, AuthContext } from './contexts/AuthContext';
 import { useContext } from 'react';
 import Layout from './components/Layout';
 
-// Import actual pages
 import Login from './pages/Login';
+import AddUser from './pages/AddUser';
 import Dashboard from './pages/Dashboard';
 import NewIncident from './pages/NewIncident';
+import IncidentsList from './pages/IncidentsList';
 import IncidentDetail from './pages/IncidentDetail';
 import Deployments from './pages/Deployments';
 import Services from './pages/Services';
 import Report from './pages/Report';
 
-const IncidentsList = () => <Navigate to="/" replace />;
-
-// Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
   if (!user) return <Navigate to="/login" replace />;
@@ -30,6 +28,7 @@ export default function App() {
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="users/new" element={<AddUser />} />
             <Route path="incidents" element={<IncidentsList />} />
             <Route path="incidents/new" element={<NewIncident />} />
             <Route path="incidents/:id" element={<IncidentDetail />} />

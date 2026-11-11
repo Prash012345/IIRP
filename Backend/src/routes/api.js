@@ -18,6 +18,46 @@ const router = express.Router();
 
 // 1. AUTH & USERS (Requirement 1)
 
+const createUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+  role: z.enum(['ADMIN', 'ENGINEER']).default('ENGINEER'),
+  title: z.string().optional(),
+});
+
+router.post('/user', authenticate, authorizeRoles('ADMIN'), async (req, res, next) => {
+  try {
+    const parsed = createUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.format() });
+    }
+    
+    const { name, email, password, role, title } = parsed.data;
+
+    const existingUser = await query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    const result = await query(
+      'INSERT INTO users (name, email, password_hash, role, title) VALUES (?, ?, ?, ?, ?)',
+      [name, email, passwordHash, role, title || null]
+    );
+
+    const createdUser = await query(
+      'SELECT id, name, email, role, title, created_at FROM users WHERE id = ?', 
+      [result.insertId]
+    );
+    
+    res.status(201).json(createdUser[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -224,7 +264,7 @@ router.post('/incidents', authenticate, async (req, res, next) => {
     await conn.execute(
       `INSERT INTO timeline_events (incident_id, user_id, type, title, description)
        VALUES (?, ?, 'INCIDENT_CREATED', 'Incident created', ?)`,
-      [incidentId, req.user.id, `By ${req.user.name}`]
+      [incidentId, req.user.id, 'Initial ticket logged.']
     );
 
     // 2. Check automatic deployment correlation within window
@@ -274,7 +314,7 @@ router.post('/incidents', authenticate, async (req, res, next) => {
   }
 });
 
-// Update incident status, severity, or assignee (Preserves history on timeline!)
+// Update incident status, severity, or assignee
 router.patch('/incidents/:id', authenticate, async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
@@ -312,18 +352,21 @@ router.patch('/incidents/:id', authenticate, async (req, res, next) => {
       ]
     );
 
-    // Record status transition on timeline
+    const generatedEventIds = []; 
+
+    // Record Status change on timeline
     if (status && status !== incident.status) {
-      await conn.execute(
+      const [result] = await conn.execute(
         `INSERT INTO timeline_events (incident_id, user_id, type, title, description)
          VALUES (?, ?, 'STATUS_CHANGE', ?, ?)`,
         [
           incidentId,
           req.user.id,
           `Status changed to ${status}`,
-          `Transitioned from ${incident.status} → ${status} by ${req.user.name}`,
+          `Transitioned from ${incident.status} → ${status}`,
         ]
       );
+      generatedEventIds.push(result.insertId);
 
       // If resolved, restore service status to HEALTHY
       if (status === 'RESOLVED') {
@@ -331,19 +374,35 @@ router.patch('/incidents/:id', authenticate, async (req, res, next) => {
       }
     }
 
-    // Record assignment change on timeline
+    // Record Severity change on timeline
+    if (severity && severity !== incident.severity) {
+      const [result] = await conn.execute(
+        `INSERT INTO timeline_events (incident_id, user_id, type, title, description)
+         VALUES (?, ?, 'STATUS_CHANGE', ?, ?)`,
+        [
+          incidentId,
+          req.user.id,
+          `Severity changed to ${severity}`,
+          `Transitioned from ${incident.severity} → ${severity}`,
+        ]
+      );
+      generatedEventIds.push(result.insertId);
+    }
+
+    // Record Assignment change on timeline
     if (assignedToId !== undefined && Number(assignedToId) !== Number(incident.assigned_to_id)) {
       if (assignedToId === null) {
-        await conn.execute(
+        const [result] = await conn.execute(
           `INSERT INTO timeline_events (incident_id, user_id, type, title, description)
-           VALUES (?, ?, 'ASSIGNMENT', 'Incident unassigned', ?)`,
-          [incidentId, req.user.id, `Unassigned by ${req.user.name}`]
+           VALUES (?, ?, 'ASSIGNMENT', 'Incident unassigned', 'Unassigned')`,
+          [incidentId, req.user.id]
         );
+        generatedEventIds.push(result.insertId);
       } else {
         const [users] = await conn.execute('SELECT name, title FROM users WHERE id = ?', [assignedToId]);
         const assignee = users[0];
         if (assignee) {
-          await conn.execute(
+          const [result] = await conn.execute(
             `INSERT INTO timeline_events (incident_id, user_id, type, title, description)
              VALUES (?, ?, 'ASSIGNMENT', ?, ?)`,
             [
@@ -353,15 +412,35 @@ router.patch('/incidents/:id', authenticate, async (req, res, next) => {
               `(${assignee.title || 'Engineer'})`,
             ]
           );
+          generatedEventIds.push(result.insertId);
         }
       }
     }
 
     await conn.commit();
 
-    // Broadcast real-time update via Socket.io
-    io.to(`incident:${incidentId}`).emit('incident_updated', { incidentId, status: newStatus, assignedToId: newAssignedTo });
+    // 1. Broadcast the incident state changes
+    io.to(`incident:${incidentId}`).emit('incident_updated', { 
+      incidentId, 
+      status: newStatus, 
+      severity: newSeverity, 
+      assignedToId: newAssignedTo 
+    });
     io.emit('dashboard_updated', { incidentId });
+
+    // 2. Broadcast every new timeline event so other users see the history populate instantly
+    for (const eventId of generatedEventIds) {
+      const [eventRows] = await conn.execute(
+        `SELECT t.*, u.name AS user_name, u.title AS user_title
+         FROM timeline_events t
+         LEFT JOIN users u ON t.user_id = u.id
+         WHERE t.id = ?`,
+        [eventId]
+      );
+      if (eventRows[0]) {
+        io.to(`incident:${incidentId}`).emit('timeline_event_added', eventRows[0]);
+      }
+    }
 
     res.json({ message: 'Incident updated', status: newStatus, severity: newSeverity, assignedToId: newAssignedTo });
   } catch (err) {
@@ -601,7 +680,11 @@ router.get('/incidents/:id/report', authenticate, async (req, res, next) => {
       [incidentId]
     );
     const timeline = await query(
-      'SELECT * FROM timeline_events WHERE incident_id = ? ORDER BY occurred_at ASC',
+      `SELECT t.*, u.name AS user_name
+       FROM timeline_events t
+       LEFT JOIN users u ON t.user_id = u.id
+       WHERE t.incident_id = ? 
+       ORDER BY t.occurred_at ASC`,
       [incidentId]
     );
     const services = await query('SELECT * FROM services');

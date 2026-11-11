@@ -1,8 +1,6 @@
-/**
- * 1. Circular Dependency Check (Requirement 4)
- * edges: Array of { service_id, depends_on_id }
- * Checks if adding (serviceId depends on dependsOnId) creates a cycle.
- */
+
+  // 1. Circular Dependency Check (Requirement 4)
+
 export function hasCircularDependency(edges, serviceId, dependsOnId) {
   if (Number(serviceId) === Number(dependsOnId)) return true;
 

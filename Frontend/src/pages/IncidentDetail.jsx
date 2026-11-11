@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api from '../services/api';
 import { AuthContext } from '../contexts/AuthContext';
-import { Clock, AlertTriangle, MessageSquare, Activity, Users, Send } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Clock, AlertTriangle, MessageSquare, Activity, Users, Send, FileText } from 'lucide-react';
 
 const Badge = ({ children, type }) => {
   const styles = {
@@ -31,28 +32,32 @@ export default function IncidentDetail() {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const socketRef = useRef(null);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    // 1. Fetch initial data
-    const fetchIncident = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get(`/incidents/${id}`);
-        setData(res.data);
+        const [incidentRes, usersRes] = await Promise.all([
+          api.get(`/incidents/${id}`),
+          api.get('/users')
+        ]);
+        setData(incidentRes.data);
+        setUsers(usersRes.data);
       } catch (err) {
-        console.error('Error fetching incident', err);
+        console.error('Error fetching data', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchIncident();
+    fetchData();
 
-    // 2. Setup WebSockets for Real-Time Collaboration (Requirement 5)
     socketRef.current = io('http://localhost:4000');
     
     socketRef.current.emit('join_incident', { incidentId: id, user: { id: user.id, name: user.name } });
 
     socketRef.current.on('presence_updated', (users) => {
-      setActiveUsers(users);
+      const uniqueUsers = Array.from(new Map(users.map(u => [u.id, u])).values());
+      setActiveUsers(uniqueUsers);
     });
 
     socketRef.current.on('timeline_event_added', (newEvent) => {
@@ -62,11 +67,13 @@ export default function IncidentDetail() {
       }));
     });
 
-    socketRef.current.on('incident_updated', (updates) => {
-      setData((prev) => ({
-        ...prev,
-        incident: { ...prev.incident, ...updates }
-      }));
+    socketRef.current.on('incident_updated', async () => {
+      try {
+        const res = await api.get(`/incidents/${id}`);
+        setData(res.data);
+      } catch (err) {
+        console.error('Failed to sync incident update', err);
+      }
     });
 
     return () => {
@@ -86,10 +93,24 @@ export default function IncidentDetail() {
         idempotencyKey: `comment-${Date.now()}-${user.id}`
       });
       setNewComment('');
-      // Note: We don't manually update the timeline array here! 
-      // The WebSocket will broadcast the event back to us and everyone else automatically.
     } catch (err) {
       console.error('Failed to post comment', err);
+    }
+  };
+
+  const handleUpdateIncident = async (field, value) => {
+    setData((prev) => ({
+      ...prev,
+      incident: { ...prev.incident, [field]: value }
+    }));
+    
+    try {
+      await api.patch(`/incidents/${id}`, { [field]: value });
+      
+      const res = await api.get(`/incidents/${id}`);
+      setData(res.data);
+    } catch (err) {
+      console.error('Failed to update incident', err);
     }
   };
 
@@ -101,45 +122,80 @@ export default function IncidentDetail() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      {/* Left Column: Details & Timeline */}
       <div className="lg:col-span-2 space-y-6">
         
-        {/* Incident Header Card */}
         <div className="bg-surface rounded-lg shadow-sm border border-slate-200 p-6">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start mb-4 gap-4">
             <div>
               <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
                 {incident.code}: {incident.title}
               </h1>
               <p className="text-slate-500 mt-1">Reported {new Date(incident.created_at).toLocaleString()}</p>
             </div>
-            <div className="flex gap-2 items-center">
-              <select 
-                className="text-xs border rounded p-1 bg-slate-50"
-                value={incident.severity}
-                onChange={(e) => api.patch(`/incidents/${id}`, { severity: e.target.value })}
-              >
-                <option value="CRITICAL">CRITICAL</option>
-                <option value="HIGH">HIGH</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="LOW">LOW</option>
-              </select>
-              <select 
-                className="text-xs border rounded p-1 bg-slate-50"
-                value={incident.status}
-                onChange={(e) => api.patch(`/incidents/${id}`, { status: e.target.value })}
-              >
-                <option value="OPEN">OPEN</option>
-                <option value="INVESTIGATING">INVESTIGATING</option>
-                <option value="MONITORING">MONITORING</option>
-                <option value="RESOLVED">RESOLVED</option>
-              </select>
+            
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex gap-2 items-center">
+                <select
+                  className="text-xs border rounded p-1 bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed font-semibold"
+                  value={incident.assigned_to_id || ''}
+                  onChange={(e) => handleUpdateIncident('assignedToId', e.target.value === '' ? null : Number(e.target.value))}
+                  disabled={user?.role !== 'ADMIN' || incident.status === 'RESOLVED'}
+                  title={user?.role !== 'ADMIN' ? "Only Administrators can reassign tickets" : "Reassign Incident"}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <select 
+                  className="text-xs border rounded p-1 bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed font-semibold"
+                  value={incident.severity}
+                  onChange={(e) => handleUpdateIncident('severity', e.target.value)}
+                  disabled={incident.status === 'RESOLVED'}
+                >
+                  <option value="CRITICAL">CRITICAL</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="LOW">LOW</option>
+                </select>
+                <select 
+                  className="text-xs border rounded p-1 bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed font-semibold"
+                  value={incident.status}
+                  onChange={(e) => handleUpdateIncident('status', e.target.value)}
+                  disabled={incident.status === 'RESOLVED'}
+                >
+                  <option value="OPEN">OPEN</option>
+                  <option value="INVESTIGATING">INVESTIGATING</option>
+                  <option value="MONITORING">MONITORING</option>
+                  <option value="RESOLVED">RESOLVED</option>
+                </select>
+              </div>
+
+              {incident.status === 'RESOLVED' && (
+                <Link 
+                  to={`/incidents/${id}/report`}
+                  className="bg-slate-800 text-white px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium hover:bg-slate-700 transition-colors shadow-sm"
+                >
+                  <FileText className="w-4 h-4" /> Post-Incident Report
+                </Link>
+              )}
             </div>
           </div>
-          <p className="text-slate-700 whitespace-pre-wrap">{incident.description}</p>
+          
+          <p className="text-slate-700 whitespace-pre-wrap">{incident.description && (
+            <div className="mt-6 mb-4 p-4 bg-slate-50 border border-slate-100 rounded-md">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Issue Description</h3>
+              <p className="text-slate-700 whitespace-pre-wrap text-sm">{incident.description}</p>
+            </div>
+          )}</p>
+          
+          {incident.status === 'RESOLVED' && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 text-green-800 text-sm rounded-md flex items-center gap-2">
+              <Clock className="w-4 h-4" /> This incident has been resolved and the investigation timeline is now frozen.
+            </div>
+          )}
         </div>
 
-        {/* Evidence Timeline */}
         <div className="bg-surface rounded-lg shadow-sm border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5"/> Investigation Timeline
@@ -156,7 +212,15 @@ export default function IncidentDetail() {
                     <h3 className="font-bold text-slate-800 text-sm">{event.title}</h3>
                     <time className="text-xs text-slate-500">{new Date(event.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
                   </div>
+                  
                   <p className="text-slate-600 text-sm">{event.description}</p>
+                  {event.user_name && (
+                    <p className="text-xs font-medium text-slate-500 mb-1">
+                      By {event.user_name} {event.user_title ? `(${event.user_title})` : ''}
+                    </p>
+                  )}
+                  
+                  
                   {event.metadata && (
                     <pre className="mt-2 bg-slate-100 p-2 rounded text-xs text-slate-700 overflow-x-auto border border-slate-200">
                       {JSON.stringify(event.metadata, null, 2)}
@@ -167,26 +231,28 @@ export default function IncidentDetail() {
             ))}
           </div>
 
-          {/* Add Note Form */}
           <form onSubmit={handleAddComment} className="mt-8 flex gap-2 border-t border-slate-200 pt-6">
             <input
               type="text"
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add an investigation note or comment..."
-              className="flex-1 px-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={incident.status === 'RESOLVED'}
+              placeholder={incident.status === 'RESOLVED' ? "Investigation is closed." : "Add an investigation note or comment..."}
+              className="flex-1 px-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
             />
-            <button type="submit" className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 flex items-center gap-2">
+            <button 
+              type="submit" 
+              disabled={incident.status === 'RESOLVED'} 
+              className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Send className="w-4 h-4"/> Post
             </button>
           </form>
         </div>
       </div>
 
-      {/* Right Column: Context & Metadata */}
       <div className="space-y-6">
         
-        {/* Real-time Presence */}
         <div className="bg-surface rounded-lg shadow-sm border border-slate-200 p-6">
           <h2 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
             <Users className="w-4 h-4"/> Active Investigators
@@ -201,7 +267,6 @@ export default function IncidentDetail() {
           </ul>
         </div>
 
-        {/* Affected Service Info */}
         <div className="bg-surface rounded-lg shadow-sm border border-slate-200 p-6">
           <h2 className="text-sm font-semibold text-slate-800 mb-3">Affected Service</h2>
           <div className="p-3 bg-slate-50 border border-slate-200 rounded text-sm">
@@ -210,7 +275,7 @@ export default function IncidentDetail() {
           </div>
         </div>
 
-        {/* Deployment Correlation (Requirement 3) */}
+        {/* Deployment Correlation */}
         <div className="bg-surface rounded-lg shadow-sm border border-slate-200 p-6">
           <h2 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-warning"/> Correlated Deployments

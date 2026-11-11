@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { ShieldAlert, LogOut, LayoutDashboard, Server, Activity, Rocket } from 'lucide-react';
+import { ShieldAlert, LogOut, LayoutDashboard, Server, Activity, Rocket, User } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useContext(AuthContext);
@@ -48,6 +48,18 @@ export default function Layout() {
                   </Link>
                 );
               })}
+
+              {user?.role === 'ADMIN' && (
+             <Link
+               to="/users/new"
+               className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                 location.pathname === '/users/new' ? 'bg-primary-600 text-white' : 'text-primary-100 hover:bg-primary-600'
+               }`}
+             >
+               <User className="w-4 h-4" />
+               Manage User
+             </Link>
+           )}
             </nav>
           </div>
 

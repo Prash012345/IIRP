@@ -4,11 +4,10 @@
 1. Ensure Docker and Docker Compose are installed.
 2. Run `docker compose up -d` in the root directory.
 3. Once containers are running, navigate to the `Backend` directory and run:
-   - `npm install`
    - `npm run seed` (This applies the schema and seeds the sample data)
 4. Access the frontend at `http://localhost:8080` (if using Docker) or `http://localhost:5173` (if running locally via `npm run dev`).
 5. **Test Logins:** 
-   - Admin: `admin@incident.io` / `password123`
+   - Admin     : `admin@incident.io` / `password123`
    - Engineer 1: `juan@incident.io` / `password123`
    - Engineer 2: `kevin@incident.io` / `password123`
 

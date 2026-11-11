@@ -26,12 +26,20 @@ export default function Deployments() {
       <div className="lg:col-span-2 bg-surface p-6 rounded-lg border">
         <h1 className="text-xl font-bold mb-4 flex items-center gap-2"><Rocket className="w-5 h-5"/> Deployment History</h1>
         <table className="w-full text-left text-sm border-collapse">
-          <thead><tr className="border-b text-slate-500"><th className="py-2">Version</th><th className="py-2">Service</th><th className="py-2">Deployed At</th></tr></thead>
+          <thead>
+            <tr className="border-b text-slate-500">
+              <th className="py-2">Version</th>
+              <th className="py-2">Service</th>
+              <th className="py-2">Description</th>
+              <th className="py-2">Deployed At</th>
+            </tr>
+          </thead>
           <tbody>
             {deployments.map(d => (
               <tr key={d.id} className="border-b">
                 <td className="py-3 font-medium text-slate-800">{d.version}</td>
                 <td className="py-3 text-slate-600">{d.service_name}</td>
+                <td className="py-3 text-slate-700">{d.description || '-'}</td>
                 <td className="py-3 text-slate-500">{new Date(d.deployed_at).toLocaleString()}</td>
               </tr>
             ))}

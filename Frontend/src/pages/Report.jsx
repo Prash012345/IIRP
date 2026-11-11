@@ -25,6 +25,21 @@ export default function Report() {
   if (loading) return <div className="p-8 text-center">Generating report...</div>;
   if (!data || !data.incident) return <div className="p-8 text-center text-danger">Report not found</div>;
 
+  if (data.incident.status !== 'RESOLVED') {
+    return (
+      <div className="max-w-2xl mx-auto mt-12 p-8 text-center bg-surface border border-slate-200 rounded-lg shadow-sm">
+        <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-slate-800">Report Unavailable</h2>
+        <p className="text-slate-500 mt-2 mb-6">
+          The Post-Incident Report is automatically generated only after the incident has been formally marked as RESOLVED.
+        </p>
+        <Link to={`/incidents/${id}`} className="bg-primary-600 text-white px-4 py-2 rounded-md font-medium hover:bg-primary-700">
+          Return to Investigation
+        </Link>
+      </div>
+    );
+  }
+
   const { incident, report, actions, timeline, affectedServices } = data;
 
   const handleExportPDF = () => {
@@ -119,13 +134,16 @@ export default function Report() {
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Key Investigation Events</h3>
           <table className="w-full text-left text-sm">
             <tbody className="divide-y divide-slate-200">
-              {timeline.filter(t => ['INCIDENT_CREATED', 'DEPLOYMENT_DETECTED', 'RECOVERY_ACTION', 'STATUS_CHANGE'].includes(t.type)).map(event => (
+              {timeline.map(event => (
                 <tr key={event.id}>
                   <td className="py-2 pr-4 text-slate-500 whitespace-nowrap align-top w-24">
                     {new Date(event.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="py-2 font-medium text-slate-800 align-top w-48">
-                    {event.title}
+                  <td className="py-2 align-top w-48">
+                    <div className="font-medium text-slate-800">{event.title}</div>
+                    {event.user_name && (
+                      <div className="text-xs text-slate-500 mt-0.5">By {event.user_name}</div>
+                    )}
                   </td>
                   <td className="py-2 text-slate-600 align-top">
                     {event.description}

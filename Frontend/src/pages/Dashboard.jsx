@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
-import { AlertCircle, AlertTriangle, CheckCircle, Activity } from 'lucide-react';
+import { io } from 'socket.io-client';
+import { AlertCircle, AlertTriangle, CheckCircle, Activity, Filter } from 'lucide-react';
 
-// Helper component for classic status badges
 const Badge = ({ children, type }) => {
   const styles = {
     CRITICAL: 'bg-red-100 text-red-800 border-red-200',
@@ -26,6 +26,13 @@ export default function Dashboard() {
   const [data, setData] = useState({ summary: {}, incidents: [] });
   const [loading, setLoading] = useState(true);
 
+  const [filters, setFilters] = useState({
+    status: '',
+    severity: '',
+    service: '',
+    assignee: ''
+  });
+
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
@@ -37,8 +44,51 @@ export default function Dashboard() {
         setLoading(false);
       }
     };
-    fetchDashboard();
+    
+    fetchDashboard(); // Initial load
+
+    const socket = io('http://localhost:4000');
+    socket.on('dashboard_updated', () => {
+      fetchDashboard(); // Silently refresh the list when someone updates an incident
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
+
+  const uniqueServices = useMemo(() => {
+    return [...new Set(data.incidents.map(inc => inc.service_name).filter(Boolean))];
+  }, [data.incidents]);
+
+  const uniqueAssignees = useMemo(() => {
+    return [...new Set(data.incidents.map(inc => inc.assigned_to_name).filter(Boolean))];
+  }, [data.incidents]);
+
+  const filteredIncidents = useMemo(() => {
+    return data.incidents.filter((inc) => {
+      const matchStatus = !filters.status || inc.status === filters.status;
+      const matchSeverity = !filters.severity || inc.severity === filters.severity;
+      const matchService = !filters.service || inc.service_name === filters.service;
+      
+      let matchAssignee = true;
+      if (filters.assignee === 'Unassigned') {
+        matchAssignee = !inc.assigned_to_name;
+      } else if (filters.assignee) {
+        matchAssignee = inc.assigned_to_name === filters.assignee;
+      }
+
+      return matchStatus && matchSeverity && matchService && matchAssignee;
+    });
+  }, [data.incidents, filters]);
+
+  const handleFilterChange = (e) => {
+    setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ status: '', severity: '', service: '', assignee: '' });
+  };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading dashboard...</div>;
 
@@ -55,7 +105,6 @@ export default function Dashboard() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Overview</h1>
       
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, idx) => {
           const Icon = stat.icon;
@@ -81,6 +130,47 @@ export default function Dashboard() {
             + New Incident
           </Link>
         </div>
+
+        {/* Filter Bar */}
+        <div className="px-6 py-3 border-b border-slate-200 bg-white flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 text-sm text-slate-500 font-medium mr-2">
+            <Filter className="w-4 h-4" /> Filters:
+          </div>
+          
+          <select name="status" value={filters.status} onChange={handleFilterChange} className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-slate-50 outline-none focus:ring-1 focus:ring-primary-500">
+            <option value="">All Statuses</option>
+            <option value="OPEN">OPEN</option>
+            <option value="INVESTIGATING">INVESTIGATING</option>
+            <option value="MONITORING">MONITORING</option>
+            <option value="RESOLVED">RESOLVED</option>
+          </select>
+
+          <select name="severity" value={filters.severity} onChange={handleFilterChange} className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-slate-50 outline-none focus:ring-1 focus:ring-primary-500">
+            <option value="">All Severities</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+
+          <select name="service" value={filters.service} onChange={handleFilterChange} className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-slate-50 outline-none focus:ring-1 focus:ring-primary-500">
+            <option value="">All Services</option>
+            {uniqueServices.map(srv => <option key={srv} value={srv}>{srv}</option>)}
+          </select>
+
+          <select name="assignee" value={filters.assignee} onChange={handleFilterChange} className="text-sm border border-slate-300 rounded px-2 py-1.5 bg-slate-50 outline-none focus:ring-1 focus:ring-primary-500">
+            <option value="">All Assignees</option>
+            <option value="Unassigned">Unassigned Only</option>
+            {uniqueAssignees.map(user => <option key={user} value={user}>{user}</option>)}
+          </select>
+
+          {Object.values(filters).some(v => v !== '') && (
+            <button onClick={clearFilters} className="text-sm text-primary-600 hover:underline ml-2">
+              Clear All
+            </button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -90,11 +180,12 @@ export default function Dashboard() {
                 <th className="px-6 py-3 font-medium">Severity</th>
                 <th className="px-6 py-3 font-medium">Status</th>
                 <th className="px-6 py-3 font-medium">Service</th>
+                <th className="px-6 py-3 font-medium">Assignee</th>
                 <th className="px-6 py-3 font-medium">Created</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-sm">
-              {incidents.slice(0, 10).map((inc) => (
+              {filteredIncidents.map((inc) => (
                 <tr key={inc.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap font-medium text-primary-600">
                     <Link to={`/incidents/${inc.id}`} className="hover:underline">{inc.code}</Link>
@@ -103,15 +194,18 @@ export default function Dashboard() {
                   <td className="px-6 py-4 whitespace-nowrap"><Badge type={inc.severity}>{inc.severity}</Badge></td>
                   <td className="px-6 py-4 whitespace-nowrap"><Badge type={inc.status}>{inc.status}</Badge></td>
                   <td className="px-6 py-4 whitespace-nowrap text-slate-600">{inc.service_name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                    {inc.assigned_to_name || <span className="text-slate-400 italic">Unassigned</span>}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-slate-500">
                     {new Date(inc.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                   </td>
                 </tr>
               ))}
-              {incidents.length === 0 && (
+              {filteredIncidents.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
-                    No incidents found.
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
+                    No incidents match the selected filters.
                   </td>
                 </tr>
               )}

@@ -15,7 +15,7 @@ export default {
           700: '#1d4ed8',
         },
         surface: '#ffffff',
-        background: '#f8fafc', // Light slate for classic contrast
+        background: '#f8fafc',
         danger: '#ef4444',
         warning: '#f59e0b',
         success: '#10b981',

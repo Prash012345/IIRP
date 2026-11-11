@@ -6,7 +6,6 @@ import dagre from 'dagre';
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-// Helper to auto-layout the nodes in a top-down tree
 const getLayoutedElements = (nodes, edges, direction = 'TB') => {
   dagreGraph.setGraph({ rankdir: direction });
 
@@ -57,8 +56,6 @@ export default function ServiceGraph({ services, dependencies }) {
     });
 
     // 2. Map backend dependencies to React Flow Edges
-    // Important: In our DB, "service_id" DEPENDS ON "depends_on_id"
-    // So the visual flow of traffic/impact goes FROM depends_on_id TO service_id
     const mappedEdges = dependencies.map((dep) => ({
       id: `e${dep.depends_on_id}-${dep.service_id}`,
       source: String(dep.depends_on_id),
